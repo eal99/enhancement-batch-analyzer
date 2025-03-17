@@ -40,7 +40,7 @@ with col1:
 
 with col2:
     st.subheader("🖼️ Product Image")
-    image_url = enhanced_selected.get('Uploaded URL', '')
+    image_url = enhanced_selected.get('Cloudinary_1', '')
     if pd.notna(image_url) and image_url:
         st.image(image_url, use_container_width=True)
         st.caption(image_url)
