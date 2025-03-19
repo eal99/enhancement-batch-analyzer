@@ -49,6 +49,8 @@ def load_data():
     enhanced_df_disp = enhanced_df.astype(str)
     original_df_disp = original_df.astype(str)
 
+
+
     return enhanced_df_disp, original_df_disp, enhanced_df, original_df
 
 enhanced_df_disp, original_df_disp, enhanced_df_raw, original_df_raw = load_data()
@@ -209,7 +211,7 @@ def retrieve_and_respond_streaming(query: str) -> dict:
 
 
 # Create a tabbed layout for the app
-tabs = st.tabs(["Overview", "Missing Values & Statistics", "Visualizations", "Data Chat"])
+tabs = st.tabs(["Overview", "Missing Values & Statistics", "Visualizations", "Data Chat", "New Image Table"])
 
 ###########################################
 # Overview Tab
@@ -400,4 +402,60 @@ with tabs[3]:
                         st.warning(f"No Cloudinary image URLs available for SKU: {sku}")
     else:
         st.warning("Please enter a query.")
+
+###########################################
+# JSON Table Tab (New)
+###########################################
+
+
+    # Configure columns to display images if needed (assuming you have image URL fields)
+    column_config = {
+        "Cloudinary_1": st.column_config.ImageColumn(
+            label="Main Image",
+            help="Primary product image",
+            width="medium"
+        ),
+        "Cloudinary_3": st.column_config.ImageColumn(
+            label="Secondary Image",
+            help="Secondary product image",
+            width="medium"
+        ),
+        "Cloudinary_4": st.column_config.ImageColumn(
+            label="Tertiary Image",
+            help="Tertiary product image",
+            width="medium"
+        )
+    }
+
+
+
+    with tabs[4]:
+        st.title("JSON Data Table with Filters & Images")
+
+        # Load your JSON file
+        with open("data/image_data.json", "r") as f:
+            json_data = json.load(f)
+
+        # Convert JSON to DataFrame
+        df_json = pd.DataFrame(json_data)
+
+        # # (Optional) Drop any unwanted columns or clean the DataFrame
+        # if "" in df_json.columns:
+        #     df_json = df_json.drop(columns=[""])
+
+        # Add an interactive filter (for example, by 'Internal ID')
+        selected_id = st.selectbox("Select Internal ID", df_json["Internal ID"].unique())
+        filtered_df = df_json[df_json["Internal ID"] == selected_id]
+
+        # Use the column configuration defined above to render image columns as images.
+        st.subheader("Filtered JSON Data")
+        edited_json_df = st.data_editor(
+            filtered_df,
+            column_config=column_config,
+            hide_index=True,
+            num_rows="dynamic"
+        )
+
+        st.write("Final JSON Data Table:")
+        st.dataframe(edited_json_df, use_container_width=True)
 
