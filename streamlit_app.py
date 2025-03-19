@@ -24,7 +24,7 @@ def setup_openai():
 client = setup_openai()
 
 # Your known vector store ID (replace with your actual vector store ID)
-VECTOR_ID = st.secrets["VECTOR_STORE_ID"]
+VECTOR_STORE_ID = st.secrets["VECTOR_ID"]
 
 st.set_page_config(
     page_title="Enhanced vs Original Data Dashboard",
