@@ -14,7 +14,7 @@ def setup_openai():
     """
     # Directly using the API key in code is not recommended for production,
     # but this is how you'd do it if you must:
-    api_key = "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"
+    api_key = st.secrets["OPENAI_API_KEY"]
     if not api_key:
         raise ValueError("API key not found.")
     openai.api_key = api_key
@@ -24,7 +24,7 @@ def setup_openai():
 client = setup_openai()
 
 # Your known vector store ID (replace with your actual vector store ID)
-VECTOR_STORE_ID = "vs_67d9cee7f2b48191a9d4bda9953d4b55"
+VECTOR_ID = st.secrets["VECTOR_STORE_ID"]
 
 st.set_page_config(
     page_title="Enhanced vs Original Data Dashboard",
