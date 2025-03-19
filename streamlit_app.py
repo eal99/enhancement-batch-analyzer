@@ -3,38 +3,23 @@ import pandas as pd
 import difflib
 import matplotlib.pyplot as plt
 import json
-import base64
-import os
-import requests
-
-# ========= NEW IMPORTS FOR OPENAI AND STREAMING ========== #
+# ========= NEW IMPORTS FOR OPENAI RETRIEVAL ========= #
 import openai
 from openai import OpenAI
 
-def setup_openai():
-    """
-    Loads your OpenAI API key and returns an OpenAI client instance.
-    In production, it's best to store your key in st.secrets or env variables.
-    """
-    api_key = st.secrets["OPENAI_API_KEY"]
-    if not api_key:
-        raise ValueError("API key not found.")
-    openai.api_key = api_key
-    return OpenAI(api_key=api_key)
+OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-client = setup_openai()
 
-# Your known vector store ID (replace with your actual vector store ID if needed)
-VECTOR_STORE_ID = st.secrets.get("VECTOR_ID", "YOUR_VECTOR_STORE_ID")
+
+# Your known vector store ID (replace with your actual vector store ID)
+VECTOR_STORE_ID = st.secrets["VECTOR_ID"]
 
 st.set_page_config(
     page_title="Enhanced vs Original Data Dashboard",
     layout="wide"
 )
 
-# -------------------------------------------------------------------------
-#                 ORIGINAL DATA-LOADING FUNCTIONS
-# -------------------------------------------------------------------------
+# Load datasets: Enhanced and Original data remain unchanged.
 @st.cache_data
 def load_data():
     enhanced_df = pd.read_excel('data/Updated_and_Fixed_03_18_25.xlsx', engine='openpyxl')
@@ -43,18 +28,22 @@ def load_data():
         sheet_name='eComMasterDataResults',
         engine='openpyxl'
     )
+
     # Ensure SKU columns are strings
     enhanced_df['SKU'] = enhanced_df['SKU'].astype(str)
     original_df['SKU'] = original_df['SKU'].astype(str)
 
-    # Create display versions for convenience
+    # Create display versions
     enhanced_df_disp = enhanced_df.astype(str)
     original_df_disp = original_df.astype(str)
+
+
 
     return enhanced_df_disp, original_df_disp, enhanced_df, original_df
 
 enhanced_df_disp, original_df_disp, enhanced_df_raw, original_df_raw = load_data()
 
+# Load the new CSV file with SKU and image links
 @st.cache_data
 def load_images():
     images_df = pd.read_csv("data/image_links.csv")
@@ -63,20 +52,20 @@ def load_images():
 
 images_df = load_images()
 
-# -------------------------------------------------------------------------
-#        ORIGINAL JSON-SCHEMA STREAMING RESPONSE FUNCTION
-# -------------------------------------------------------------------------
+# ========= NEW HELPER FUNCTION FOR RETRIEVAL + RESPONSES API ========= #
+
 def retrieve_and_respond_streaming(query: str) -> dict:
     """
     Use the new OpenAI Responses API in streaming mode, enforcing a JSON Schema
     to ensure well-formed product data. Return the parsed JSON as a dictionary.
-    (Original example method that returns a strictly valid JSON object.)
     """
+    import json
+
     streamed_text = ""
 
-    # This is an example usage of a model + JSON schema
+    # Example: Make a streaming Responses API call that enforces a JSON schema.
     response = client.responses.create(
-        model="gpt-4o-2024-08-06",   # or whichever model you prefer
+        model="gpt-4o-2024-08-06",
         input=[
             {
                 "role": "system",
@@ -204,59 +193,19 @@ def retrieve_and_respond_streaming(query: str) -> dict:
     return product_data
 
 
-# -------------------------------------------------------------------------
-#              NEW MULTI-TURN CHAT (STREAMING) EXAMPLE
-# -------------------------------------------------------------------------
-# We'll maintain a conversation state in st.session_state.
-# We'll provide a function for streaming the model's textual response.
-
-def generate_multiturn_response(conversation_history):
-    """
-    Given a conversation history list of messages (role + content),
-    call the model in streaming mode and return the final text.
-    For brevity, we won't handle function calls here,
-    but you could add them if desired.
-    """
-    partial_text = ""
-    response_stream = client.responses.create(
-        model="gpt-4o-2024-08-06",  # or any model that supports streaming
-        input=conversation_history,
-        # If you want to add function calling or file_search:
-        # tools=[{...}, {...}],
-        # tool_choice="auto",
-        stream=True,
-        max_output_tokens=1024,
-        temperature=0.7,
-    )
-
-    final_text = ""
-    for event in response_stream:
-        if event.type == "response.output_text.delta":
-            partial_text += event.delta
-            # If you want real-time UI updates:
-            # we might do something like st.session_state.partial_text = partial_text
-            # and st.experimental_rerun or a placeholder
-        elif event.type == "response.completed":
-            final_text = partial_text
-            break
-        elif event.type == "response.refusal.delta":
-            partial_text += event.delta
-        elif event.type == "response.error":
-            st.error(f"Error: {event.error}")
-
-    return final_text
 
 
-# -------------------------------------------------------------------------
-#                       STREAMLIT TABS
-# -------------------------------------------------------------------------
-tabs = st.tabs(["Overview", "Missing Values & Statistics", "Visualizations", "Data Chat"])
 
-# ==============================
-# TAB 1: OVERVIEW
-# ==============================
+
+
+# Create a tabbed layout for the app
+tabs = st.tabs(["Overview", "Missing Values & Statistics", "Visualizations", "Data Chat", "New Image Table"])
+
+###########################################
+# Overview Tab
+###########################################
 with tabs[0]:
-    st.title("🚀 Enhanced vs Original Data Dashboard")
+    st.title("🚀 Enhanced Data vs Original Data Explorer")
 
     # Ensure only SKUs present in both datasets are selectable
     common_skus = enhanced_df_disp['SKU'][enhanced_df_disp['SKU'].isin(original_df_disp['SKU'])].tolist()
@@ -276,18 +225,7 @@ with tabs[0]:
     with col1:
         st.subheader("📝 Original Data")
         original_data_df = pd.DataFrame([original_selected.dropna().to_dict()]).T
-        st.dataframe(
-            original_data_df,
-            column_config={
-                "json": st.column_config.JsonColumn(
-                    "JSON Data",
-                    help="JSON strings or objects",
-                    width="large",
-                    height=600,
-                ),
-            },
-            hide_index=True,
-        )
+        st.dataframe(original_data_df, height=400)
 
     with col2:
         st.subheader("🖼️ Product Image")
@@ -296,9 +234,9 @@ with tabs[0]:
             st.warning("No image available.")
         else:
             image_urls = []
-            for col_url in ['Cloudinary_1', 'Cloudinary_2', 'Cloudinary_3', 'Cloudinary_4']:
-                if col_url in images_row.columns:
-                    url = images_row.iloc[0][col_url]
+            for col in ['Cloudinary_1', 'Cloudinary_2', 'Cloudinary_3', 'Cloudinary_4']:
+                if col in images_row.columns:
+                    url = images_row.iloc[0][col]
                     if pd.notna(url) and str(url).strip() != '' and str(url).lower() != 'nan':
                         image_urls.append(url)
             if image_urls:
@@ -344,10 +282,9 @@ with tabs[0]:
     st.download_button("Download Enhanced Data", csv_enhanced, "Enhanced_Data.csv", "text/csv")
     st.download_button("Download Original Data", csv_original, "Original_Data.csv", "text/csv")
 
-
-# ==============================
-# TAB 2: MISSING VALUES
-# ==============================
+###########################################
+# Missing Values & Statistics Tab
+###########################################
 with tabs[1]:
     st.title("Missing Values & Statistics")
     st.subheader("Missing Values Analysis")
@@ -379,10 +316,9 @@ with tabs[1]:
     st.markdown("**Bar Chart: Missing Values (Enhanced)**")
     st.bar_chart(missing_enhanced['Missing Count'])
 
-
-# ==============================
-# TAB 3: VISUALIZATIONS
-# ==============================
+###########################################
+# Visualizations Tab
+###########################################
 with tabs[2]:
     st.title("Visualizations")
     st.subheader("Select Dataset and Column for Visualization")
@@ -413,74 +349,101 @@ with tabs[2]:
     except Exception as e:
         st.error(f"Error generating plot: {e}")
 
-
-# ==============================
-# TAB 4: DATA CHAT
-# ==============================
 with tabs[3]:
-    st.header("Data Chat (Two Methods)")
+    st.header("Data Chat (Beta)")
+    user_query = st.text_input("Enter your query here:")
 
-    # We provide two ways to chat:
-    #  1. The original "Strict JSON Output" method (retrieve_and_respond_streaming)
-    #  2. A new multi-turn, streaming text method
+    if st.button("Submit Query"):
+        with st.spinner("Querying vector store & streaming response..."):
+            final_dict = retrieve_and_respond_streaming(user_query)
+        st.success("Done!")
 
-    chat_mode = st.radio("Choose a Chat Method:", ["Strict JSON (Original)", "Multi-turn Streaming Chat"])
+        # Create two columns: one for product info and one for images
+        col_info, col_images = st.columns([2, 1])
 
-    if chat_mode == "Strict JSON (Original)":
-        st.subheader("Method #1: Strict JSON Retrieval w/ Vector Store")
-        user_query = st.text_input("Enter your query (for product data retrieval):")
-        if st.button("Submit Query"):
-            with st.spinner("Querying vector store & streaming response..."):
-                final_dict = retrieve_and_respond_streaming(user_query)
-            st.success("Done!")
-            st.subheader("Parsed JSON Output:")
+        with col_info:
+            st.subheader("Product Information")
             st.json(final_dict)
 
-            # Display matching images if "SKU" is in final_dict
-            sku = final_dict.get("SKU")
-            if sku:
-                st.subheader("Related Product Images:")
+        with col_images:
+            st.subheader("Product Images")
+
+
+            # Then, display Cloudinary images using the SKU from the API
+            if "SKU" in final_dict:
+                sku = final_dict["SKU"]
                 images_row = images_df[images_df["SKU"] == sku]
                 if images_row.empty:
-                    st.warning("No Cloudinary images found for SKU: " + sku)
+                    st.warning(f"No Cloudinary images found for SKU: {sku}")
                 else:
-                    cloud_urls = []
-                    for col_url in ['Cloudinary_1','Cloudinary_2','Cloudinary_3','Cloudinary_4']:
-                        if col_url in images_row.columns:
-                            link = images_row.iloc[0][col_url]
-                            if pd.notna(link) and str(link).strip():
-                                cloud_urls.append(link)
-                    if cloud_urls:
-                        for link in cloud_urls:
-                            st.image(link, caption=f"Image for SKU {sku}", width=300)
+                    cloudinary_urls = []
+                    for col in ['Cloudinary_1', 'Cloudinary_2', 'Cloudinary_3', 'Cloudinary_4']:
+                        if col in images_row.columns:
+                            url = images_row.iloc[0][col]
+                            if pd.notna(url) and str(url).strip() and str(url).lower() != 'nan':
+                                cloudinary_urls.append(url)
+                    if cloudinary_urls:
+                        for url in cloudinary_urls:
+                            st.image(url, caption="Cloudinary Image", width=200)
+                        st.caption("Cloudinary URLs: " + ", ".join(cloudinary_urls))
                     else:
-                        st.warning("No image links available.")
-        else:
-            st.info("Enter a query to get strictly valid JSON output.")
-
+                        st.warning(f"No Cloudinary image URLs available for SKU: {sku}")
     else:
-        st.subheader("Method #2: Multi-turn Chat with Streaming")
-        # We'll store the conversation in session_state:
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
+        st.warning("Please enter a query.")
 
-        user_input = st.text_input("Enter your message:")
-        if st.button("Send"):
-            if user_input.strip():
-                # Add user message
-                st.session_state.chat_history.append({"role": "user", "content": user_input})
-                # Generate response
-                with st.spinner("Assistant is typing..."):
-                    assistant_reply = generate_multiturn_response(st.session_state.chat_history)
-                # Add assistant message
-                st.session_state.chat_history.append({"role": "assistant", "content": assistant_reply})
+###########################################
+# JSON Table Tab (New)
+###########################################
 
-        # Display the conversation
-        for msg in st.session_state.chat_history:
-            if msg["role"] == "user":
-                st.markdown(f"**User:** {msg['content']}")
-            else:
-                st.markdown(f"**Assistant:** {msg['content']}")
 
-        st.write("---")
-        st.write("Try chatting about your data, e.g. 'How many SKUs do we have?' or general requests.")
+    # Configure columns to display images if needed (assuming you have image URL fields)
+    column_config = {
+        "Cloudinary_1": st.column_config.ImageColumn(
+            label="Main Image",
+            help="Primary product image",
+            width="medium"
+        ),
+        "Cloudinary_3": st.column_config.ImageColumn(
+            label="Secondary Image",
+            help="Secondary product image",
+            width="medium"
+        ),
+        "Cloudinary_4": st.column_config.ImageColumn(
+            label="Tertiary Image",
+            help="Tertiary product image",
+            width="medium"
+        )
+    }
+
+
+
+    with tabs[4]:
+        st.title("JSON Data Table with Filters & Images")
+
+        # Load your JSON file
+        with open("data/image_data.json", "r") as f:
+            json_data = json.load(f)
+
+        # Convert JSON to DataFrame
+        df_json = pd.DataFrame(json_data)
+
+        # # (Optional) Drop any unwanted columns or clean the DataFrame
+        # if "" in df_json.columns:
+        #     df_json = df_json.drop(columns=[""])
+
+        # Add an interactive filter (for example, by 'Internal ID')
+        selected_id = st.selectbox("Select Internal ID", df_json["Internal ID"].unique())
+        filtered_df = df_json[df_json["Internal ID"] == selected_id]
+
+        # Use the column configuration defined above to render image columns as images.
+        st.subheader("Filtered JSON Data")
+        edited_json_df = st.data_editor(
+            filtered_df,
+            column_config=column_config,
+            hide_index=True,
+            num_rows="dynamic"
+        )
+
+        st.write("Final JSON Data Table:")
+        st.dataframe(edited_json_df, use_container_width=True)
+
