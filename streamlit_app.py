@@ -7,7 +7,7 @@ import json
 import openai
 from openai import OpenAI
 
-OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 
 
@@ -22,7 +22,7 @@ st.set_page_config(
 # Load datasets: Enhanced and Original data remain unchanged.
 @st.cache_data
 def load_data():
-    enhanced_df = pd.read_excel('data/Updated_and_Fixed_03_18_25.xlsx', engine='openpyxl')
+    enhanced_df = pd.read_csv('data/Enhanced_Results.csv')
     original_df = pd.read_excel(
         "data/eComMasterDataResultsUpwork.xlsx",
         sheet_name='eComMasterDataResults',
@@ -395,55 +395,56 @@ with tabs[3]:
 # JSON Table Tab (New)
 ###########################################
 
+with tabs[4]:
+    st.title("JSON Data Table with Optional Filtering & Images")
 
-    # Configure columns to display images if needed (assuming you have image URL fields)
+    # 1. Load your JSON data as a list of objects (must be a valid JSON array).
+    with open("data/final_data.json", "r") as f:
+        json_data = json.load(f)
+
+    df_json = pd.DataFrame(json_data)
+
+    # 2. Define column configurations for image columns.
+    #    Make sure your DataFrame column names match exactly.
     column_config = {
         "Cloudinary_1": st.column_config.ImageColumn(
             label="Main Image",
             help="Primary product image",
             width="medium"
         ),
+        "Cloudinary_2": st.column_config.ImageColumn(
+            label="Second Image",
+            help="Second product image",
+            width="medium"
+        ),
         "Cloudinary_3": st.column_config.ImageColumn(
-            label="Secondary Image",
-            help="Secondary product image",
+            label="Third Image",
+            help="Third product image",
             width="medium"
         ),
         "Cloudinary_4": st.column_config.ImageColumn(
-            label="Tertiary Image",
-            help="Tertiary product image",
+            label="Fourth Image",
+            help="Fourth product image",
             width="medium"
         )
     }
 
+    # 3. Build a list of filtering options. "All" shows the entire dataset.
+    filter_values = ["All"] + df_json["Internal ID"].dropna().unique().tolist()
+    selected_id = st.selectbox("Select Internal ID (or All)", filter_values)
 
-
-    with tabs[4]:
-        st.title("JSON Data Table with Filters & Images")
-
-        # Load your JSON file
-        with open("data/image_data.json", "r") as f:
-            json_data = json.load(f)
-
-        # Convert JSON to DataFrame
-        df_json = pd.DataFrame(json_data)
-
-        # # (Optional) Drop any unwanted columns or clean the DataFrame
-        # if "" in df_json.columns:
-        #     df_json = df_json.drop(columns=[""])
-
-        # Add an interactive filter (for example, by 'Internal ID')
-        selected_id = st.selectbox("Select Internal ID", df_json["Internal ID"].unique())
+    # 4. If the user selects "All," show everything. Otherwise, filter by the selected ID.
+    if selected_id == "All":
+        filtered_df = df_json
+    else:
         filtered_df = df_json[df_json["Internal ID"] == selected_id]
 
-        # Use the column configuration defined above to render image columns as images.
-        st.subheader("Filtered JSON Data")
-        edited_json_df = st.data_editor(
-            filtered_df,
-            column_config=column_config,
-            hide_index=True,
-            num_rows="dynamic"
-        )
-
-        st.write("Final JSON Data Table:")
-        st.dataframe(edited_json_df, use_container_width=True)
+    # 5. Show the table with images rendered from the URLs.
+    st.subheader("JSON Data (Filtered if an ID is selected)")
+    st.data_editor(
+        filtered_df,
+        column_config=column_config,
+        hide_index=True,
+        num_rows="dynamic"  # Allows row insertion/deletion if you want it
+    )
 
